@@ -1,5 +1,7 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Linq;
@@ -12,6 +14,16 @@ namespace Xamarin.Forms
 	[RenderWith(typeof(_ListViewRenderer))]
 	public class ListView : ItemsView<Cell>, IListViewController, IElementConfiguration<ListView>
 	{
+		readonly List<Element> _logicalChildren = new List<Element>();
+
+#if NETSTANDARD1_0
+		ReadOnlyCollection<Element> _readOnlyLogicalChildren;
+		internal override ReadOnlyCollection<Element> LogicalChildrenInternal => _readOnlyLogicalChildren ?? 
+			(_readOnlyLogicalChildren = new ReadOnlyCollection<Element>(_logicalChildren));
+#else
+		internal override ReadOnlyCollection<Element> LogicalChildrenInternal => _logicalChildren.AsReadOnly();
+#endif
+
 		public static readonly BindableProperty IsPullToRefreshEnabledProperty = BindableProperty.Create("IsPullToRefreshEnabled", typeof(bool), typeof(ListView), false);
 
 		public static readonly BindableProperty IsRefreshingProperty = BindableProperty.Create("IsRefreshing", typeof(bool), typeof(ListView), false, BindingMode.TwoWay);
@@ -108,17 +120,11 @@ namespace Xamarin.Forms
 
 			object bc = BindingContext;
 
-			var header = Header as Element;
-			if (header != null)
-			{
+			if (Header is Element header)
 				SetChildInheritedBindingContext(header, bc);
-			}
 
-			var footer = Footer as Element;
-			if (footer != null)
-			{
+			if (Footer is Element footer)
 				SetChildInheritedBindingContext(footer, bc);
-			}
 		}
 
 		public BindingBase GroupDisplayBinding
@@ -384,17 +390,21 @@ namespace Xamarin.Forms
 		protected override void SetupContent(Cell content, int index)
 		{
 			base.SetupContent(content, index);
-			var viewCell = content as ViewCell;
-			if (viewCell != null && viewCell.View != null && HasUnevenRows)
+			if (content is ViewCell viewCell && viewCell.View != null && HasUnevenRows)
 				viewCell.View.ComputedConstraint = LayoutConstraint.None;
-			content.Parent = this;
 
+			if (content != null)
+				_logicalChildren.Add(content);
+
+			content.Parent = this;
 		}
 
 		protected override void UnhookContent(Cell content)
 		{
 			base.UnhookContent(content);
-			content.Parent = null;
+
+			if (content != null)
+				_logicalChildren.Remove(content);
 		}
 
 		[EditorBrowsable(EditorBrowsableState.Never)]
